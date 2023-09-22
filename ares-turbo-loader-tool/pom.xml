@@ -28,7 +28,7 @@
         <executions>
           <execution>
             <id>include-layout-jar</id>
-            <phase>package</phase>
+            <phase>generate-resources</phase>
             <goals>
               <goal>copy</goal>
             </goals>
