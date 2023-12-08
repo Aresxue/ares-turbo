@@ -9,6 +9,8 @@ import java.nio.ByteBuffer;
 import java.security.CodeSigner;
 import java.security.cert.Certificate;
 import java.util.Arrays;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.Manifest;
 import sun.nio.ByteBuffered;
 
@@ -16,6 +18,8 @@ import sun.nio.ByteBuffered;
  * This class is used to represent a Resource that has been loaded from the class path.
  */
 public abstract class FastResource {
+
+  private final Lock lock = new ReentrantLock();
 
   /**
    * Returns the name of the Resource.
@@ -45,11 +49,16 @@ public abstract class FastResource {
   private InputStream cachedInputStream;
 
   /* Cache result in case getBytes is called after getByteBuffer. */
-  private synchronized InputStream cachedInputStream() throws IOException {
-    if (cachedInputStream == null) {
-      cachedInputStream = getInputStream();
+  private InputStream cachedInputStream() throws IOException {
+    lock.lock();
+    try {
+      if (cachedInputStream == null) {
+        cachedInputStream = getInputStream();
+      }
+      return cachedInputStream;
+    } finally {
+      lock.unlock();
     }
-    return cachedInputStream;
   }
 
   /**

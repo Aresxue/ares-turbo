@@ -204,7 +204,7 @@ class FastJarLoader extends FastLoader {
 
   @Override
   public void close() throws IOException {
-    // closing is synchronized at higher level
+    // closing is lock at higher level
     if (!closed) {
       closed = true;
       // in case not already open.

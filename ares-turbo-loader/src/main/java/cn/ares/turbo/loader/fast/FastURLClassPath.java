@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Stack;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import sun.net.util.URLUtil;
 
 /**
@@ -47,6 +49,8 @@ public class FastURLClassPath {
   /* Whether this URLClassLoader has been closed yet */
   private volatile boolean closed = false;
 
+  private final Lock lock = new ReentrantLock();
+
   public FastURLClassPath(URL[] urls) {
     path = new URL[urls.length];
     System.arraycopy(urls, 0, path, 0, urls.length);
@@ -54,7 +58,7 @@ public class FastURLClassPath {
     loaderIndex = new FastLoaderIndex(loaders, true);
   }
 
-  public synchronized void addURL(URL url) {
+  public void addURL(URL url) {
     URL[] newPath = new URL[path.length + 1];
     System.arraycopy(path, 0, newPath, 0, path.length);
     newPath[path.length] = url;
@@ -69,20 +73,25 @@ public class FastURLClassPath {
     this.loaderIndex = newLoaderIndex;
   }
 
-  public synchronized List<IOException> closeLoaders() {
-    if (closed) {
-      return Collections.emptyList();
-    }
-    List<IOException> result = new LinkedList<>();
-    for (FastLoader loader : loaders) {
-      try {
-        loader.close();
-      } catch (IOException e) {
-        result.add(e);
+  public List<IOException> closeLoaders() {
+    lock.lock();
+    try {
+      if (closed) {
+        return Collections.emptyList();
       }
+      List<IOException> result = new LinkedList<>();
+      for (FastLoader loader : loaders) {
+        try {
+          loader.close();
+        } catch (IOException e) {
+          result.add(e);
+        }
+      }
+      closed = true;
+      return result;
+    } finally {
+      lock.unlock();
     }
-    closed = true;
-    return result;
   }
 
   /**
