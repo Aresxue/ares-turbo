@@ -33,7 +33,7 @@ Spring Boot应用程序通常使用`org.springframework.boot.loader.LaunchedURLC
       <dependency>
         <groupId>io.github.aresxue</groupId>
         <artifactId>ares-turbo-loader-tool</artifactId>
-        <version>2.1.0</version>
+        <version>2.2.0</version>
       </dependency>
     </dependencies>
  </plugin>
