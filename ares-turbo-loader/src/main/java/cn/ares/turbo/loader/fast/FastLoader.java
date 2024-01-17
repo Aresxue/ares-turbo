@@ -38,4 +38,5 @@ abstract class FastLoader {
    */
   public void close() throws IOException {
   }
+
 }

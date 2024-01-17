@@ -221,7 +221,7 @@ class FastJarLoader extends FastLoader {
     if (isOptimizable(url)) {
       String path = null;
       String host = url.getHost();
-      if (host == null || "".equals(host) || "localhost".equalsIgnoreCase(host)) {
+      if (host == null || host.isEmpty() || "localhost".equalsIgnoreCase(host)) {
         path = ParseUtil.decode(url.getFile());
       }
       if (path == null || !new File(path).exists()) {
@@ -243,8 +243,6 @@ class FastJarLoader extends FastLoader {
     try {
       url = new URL(getBaseURL(), ParseUtil.encodePath(name, false));
     } catch (MalformedURLException e) {
-      return null;
-    } catch (IOException e) {
       return null;
     } catch (AccessControlException e) {
       return null;
