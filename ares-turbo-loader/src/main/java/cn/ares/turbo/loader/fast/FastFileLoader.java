@@ -1,11 +1,12 @@
 package cn.ares.turbo.loader.fast;
 
+import cn.ares.turbo.loader.util.CollectionUtil;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Set;
 import sun.net.www.ParseUtil;
 
@@ -35,18 +36,25 @@ class FastFileLoader extends FastLoader {
   }
 
   private Set<String> getIndexKeys0() {
-    Set<String> ret = new HashSet<>();
+    Set<String> result = Collections.emptySet();
     if (dir.isDirectory()) {
-      ret.add("");
-      for (File subFile : dir.listFiles()) {
-        String name = subFile.getName();
-        ret.add(name);
-        if (subFile.isDirectory()) {
-          collectDir(ret, name + "/", subFile);
+      File[] subFiles = dir.listFiles();
+      if (null != subFiles) {
+        result = CollectionUtil.newHashSet(subFiles.length);
+        result.add("");
+        for (File subFile : subFiles) {
+          String name = subFile.getName();
+          result.add(name);
+          if (subFile.isDirectory()) {
+            collectDir(result, name + "/", subFile);
+          }
         }
+      } else {
+        result = CollectionUtil.newHashSet();
+        result.add("");
       }
     }
-    return ret;
+    return result;
   }
 
   private void collectDir(Set<String> paths, String prefix, File dir) {

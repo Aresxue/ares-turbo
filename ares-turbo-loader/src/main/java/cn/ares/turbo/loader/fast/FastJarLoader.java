@@ -4,6 +4,7 @@ import static cn.ares.turbo.loader.fast.FastFileLoader.FILE;
 import static cn.ares.turbo.loader.fast.FastURLClassPath.JAVA_VERSION;
 import static cn.ares.turbo.loader.fast.FastURLClassPath.USER_AGENT_JAVA_VERSION;
 
+import cn.ares.turbo.loader.util.CollectionUtil;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -59,7 +60,7 @@ class FastJarLoader extends FastLoader {
   }
 
   private Set<String> getIndexKeys0() {
-    Set<String> ret = new HashSet<>();
+    Set<String> ret = CollectionUtil.newHashSet();
     Enumeration<JarEntry> it = jar.entries();
     while (it.hasMoreElements()) {
       JarEntry entry = it.nextElement();

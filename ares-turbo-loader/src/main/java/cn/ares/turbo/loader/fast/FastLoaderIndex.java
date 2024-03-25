@@ -1,5 +1,7 @@
 package cn.ares.turbo.loader.fast;
 
+import cn.ares.turbo.loader.util.CollectionUtil;
+import cn.ares.turbo.loader.util.MapUtil;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,13 +18,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 class FastLoaderIndex {
 
-  private final Map<String, List<FastLoader>> indexMap = new HashMap<>();
+  private final Map<String, List<FastLoader>> indexMap;
   private final List<FastLoader> fastFileLoaders = new ArrayList<>();
   private final Set<String> indexKeys;
 
   FastLoaderIndex(final List<FastLoader> loaders, boolean multiThreads) {
     final AtomicInteger index = new AtomicInteger(0);
     final int length = loaders.size();
+    indexMap = MapUtil.newHashMap(length);
     final Set<String>[] indexKeysArr = new Set[length];
     // multi-thread
     final int thread = multiThreads ? length > 100 ? 4 : Math.min(length / 10, 4) : 1;
@@ -74,7 +77,7 @@ class FastLoaderIndex {
       for (String key : indexKeysArr[i]) {
         List<FastLoader> indexLoaders = indexMap.get(key);
         if (indexLoaders == null) {
-          indexLoaders = new LinkedList<FastLoader>();
+          indexLoaders = CollectionUtil.newArrayList(length);
           indexMap.put(key, indexLoaders);
         }
         indexLoaders.add(loader);

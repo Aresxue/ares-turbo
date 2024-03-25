@@ -2,17 +2,19 @@ package cn.ares.turbo.loader.fast;
 
 import static cn.ares.turbo.loader.fast.FastFileLoader.FILE;
 
+import cn.ares.turbo.loader.util.CollectionUtil;
+import cn.ares.turbo.loader.util.MapUtil;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.Stack;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import sun.net.util.URLUtil;
@@ -44,7 +46,7 @@ public class FastURLClassPath {
 
   /* Map of each URL opened to its corresponding Loader */
   /* Avoid duplication */
-  private final HashMap<String, FastLoader> fastLoaderMap = new HashMap<>();
+  private final HashMap<String, FastLoader> fastLoaderMap;
 
   /* Whether this URLClassLoader has been closed yet */
   private volatile boolean closed = false;
@@ -52,8 +54,10 @@ public class FastURLClassPath {
   private final Lock lock = new ReentrantLock();
 
   public FastURLClassPath(URL[] urls) {
-    path = new URL[urls.length];
-    System.arraycopy(urls, 0, path, 0, urls.length);
+    int urlLength = urls.length;
+    path = new URL[urlLength];
+    System.arraycopy(urls, 0, path, 0, urlLength);
+    fastLoaderMap = MapUtil.newHashMap(urlLength);
     loaders = createLoaders(urls, fastLoaderMap);
     loaderIndex = new FastLoaderIndex(loaders, true);
   }
@@ -63,8 +67,7 @@ public class FastURLClassPath {
     System.arraycopy(path, 0, newPath, 0, path.length);
     newPath[path.length] = url;
 
-    ArrayList<FastLoader> newLoaders = new ArrayList<>();
-    newLoaders.addAll(loaders);
+    ArrayList<FastLoader> newLoaders = new ArrayList<>(loaders);
     newLoaders.addAll(createLoaders(new URL[]{url}, fastLoaderMap));
     FastLoaderIndex newLoaderIndex = new FastLoaderIndex(newLoaders, false);
 
@@ -79,7 +82,7 @@ public class FastURLClassPath {
       if (closed) {
         return Collections.emptyList();
       }
-      List<IOException> result = new LinkedList<>();
+      List<IOException> result = new ArrayList<>();
       for (FastLoader loader : loaders) {
         try {
           loader.close();
@@ -209,24 +212,28 @@ public class FastURLClassPath {
     };
   }
 
-  private static ArrayList<FastLoader> createLoaders(URL[] us, HashMap<String, FastLoader> lmap) {
-    ArrayList<FastLoader> loaders = new ArrayList<FastLoader>();
-    Stack<URL> urls = new Stack<URL>();
+  private static ArrayList<FastLoader> createLoaders(URL[] us, HashMap<String, FastLoader> fastLoaderMap) {
+    ArrayList<FastLoader> loaders;
+    Deque<URL> urls;
+    if (null == us) {
+      urls = new ArrayDeque<URL>();
+      loaders = new ArrayList<FastLoader>();
+    } else {
+      urls = new ArrayDeque<URL>(us.length);
+      loaders = CollectionUtil.newArrayList(us.length);
+    }
     pushUrls(urls, us);
     while (!urls.isEmpty()) {
       URL url = urls.pop();
-      if (url == null) {
-        continue;
-      }
       // Skip this URL if it already has a Loader
       String urlNoFragString = URLUtil.urlNoFragString(url);
-      if (lmap.containsKey(urlNoFragString)) {
+      if (fastLoaderMap.containsKey(urlNoFragString)) {
         continue;
       }
       try {
         FastLoader loader = getLoader(url);
         loaders.add(loader);
-        lmap.put(urlNoFragString, loader);
+        fastLoaderMap.put(urlNoFragString, loader);
         pushUrls(urls, loader.getClassPath());
       } catch (IOException e) {
         // Silently ignore for now...
@@ -235,7 +242,7 @@ public class FastURLClassPath {
     return loaders;
   }
 
-  private static void pushUrls(Stack<URL> urls, URL[] us) {
+  private static void pushUrls(Deque<URL> urls, URL[] us) {
     if (us != null) {
       for (int i = us.length - 1; i >= 0; --i) {
         urls.push(us[i]);
