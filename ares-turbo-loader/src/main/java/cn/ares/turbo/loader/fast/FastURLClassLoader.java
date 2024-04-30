@@ -1,7 +1,12 @@
 package cn.ares.turbo.loader.fast;
 
+import cn.ares.turbo.loader.util.BytesLruCache;
+import cn.ares.turbo.loader.util.IoUtil;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.security.CodeSigner;
 import java.security.CodeSource;
@@ -9,6 +14,9 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.jar.Attributes;
 import java.util.jar.Attributes.Name;
 import java.util.jar.Manifest;
@@ -21,6 +29,11 @@ import org.springframework.boot.loader.LaunchedURLClassLoader;
 public class FastURLClassLoader extends LaunchedURLClassLoader implements Closeable {
 
   private static final String ENABLE_KEY = "ares.turbo.classloader.enable";
+  private static final String MAX_CACHE_SIZE_KEY = "ares.turbo.classloader.max-cache-size";
+  private static final String DEFAULT_MAX_CACHE_SIZE = Integer.toString(64 * 1024 * 1024);
+  private static final String CACHE_EXPIRE_SECONDS_KEY = "ares.turbo.classloader.cache-expire-seconds";
+  private static final String DEFAULT_CACHE_EXPIRE_SECONDS = Integer.toString(5 * 60);
+  private static final String CLASS_SUFFIX = ".class";
 
   private static final URL[] EMPTY_URLS = new URL[0];
 
@@ -30,6 +43,8 @@ public class FastURLClassLoader extends LaunchedURLClassLoader implements Closea
 
   /* The search path for classes and resources */
   private final FastURLClassPath fastURLClassPath;
+
+  private final AtomicReference<BytesLruCache> cacheHolder = new AtomicReference<>();
 
   public FastURLClassLoader(URL[] urls, ClassLoader parent) {
     this(urls, parent, ENABLE);
@@ -43,6 +58,22 @@ public class FastURLClassLoader extends LaunchedURLClassLoader implements Closea
     super(enable ? EMPTY_URLS : urls, parent);
     this.enable = enable;
     this.fastURLClassPath = enable ? new FastURLClassPath(urls) : null;
+    if (enable) {
+      // default size is 64MB
+      String maxCacheSize = System.getProperty(MAX_CACHE_SIZE_KEY, DEFAULT_MAX_CACHE_SIZE);
+      this.cacheHolder.set(new BytesLruCache(Integer.parseInt(maxCacheSize)));
+      // default cache expire seconds is 5 * 60 seconds
+      String cacheExpireSeconds = System.getProperty(CACHE_EXPIRE_SECONDS_KEY,
+          DEFAULT_CACHE_EXPIRE_SECONDS);
+      Timer timer = new Timer();
+      TimerTask timerTask = new TimerTask() {
+        @Override
+        public void run() {
+          cacheHolder.set(null);
+        }
+      };
+      timer.schedule(timerTask, Integer.parseInt(cacheExpireSeconds) * 1_000L);
+    }
   }
 
 //    public FastURLClassLoader(URL[] urls, boolean enable) {
@@ -241,6 +272,34 @@ public class FastURLClassLoader extends LaunchedURLClassLoader implements Closea
   }
 
   @Override
+  public InputStream getResourceAsStream(String name) {
+    BytesLruCache cache = cacheHolder.get();
+    if (!name.endsWith(CLASS_SUFFIX) || cache == null) {
+      return super.getResourceAsStream(name);
+    }
+
+    byte[] cacheBytes = cache.get(name);
+    if (null != cacheBytes) {
+      return new ByteArrayInputStream(cacheBytes);
+    }
+
+    InputStream inputStream = super.getResourceAsStream(name);
+    if (null == inputStream) {
+      return null;
+    }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream(4096);
+    try {
+      IoUtil.copy(inputStream, outputStream);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    byte[] bytes = outputStream.toByteArray();
+    cache.put(name, bytes);
+    return new ByteArrayInputStream(bytes);
+  }
+
+  @Override
   public Enumeration<URL> findResources(final String name) throws IOException {
     if (!enable) {
       return super.findResources(name);
@@ -280,7 +339,7 @@ public class FastURLClassLoader extends LaunchedURLClassLoader implements Closea
     };
   }
 
-  static {
+    static {
     try {
       ClassLoader.registerAsParallelCapable();
     } catch (NoSuchMethodError ignore) {
